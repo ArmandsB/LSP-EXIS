@@ -42,7 +42,14 @@ void createConnection(char server_ip[], char userNickName[])
     //Connect to remote server
     if (connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0)
     {
-    
+        clear();
+        mesg = "Did not connect! Check Ip addres or try later again!";
+        mvprintw(row/2,(col-strlen(mesg))/2.0,"%s",mesg);
+        refresh();
+        sleep(2);
+        clear();
+        endwin();
+        exit(EXIT_FAILURE);
     }
     
     clear();
@@ -100,7 +107,17 @@ void createConnection(char server_ip[], char userNickName[])
         while(1){ refresh(); };
     }
 }
-
+int didUsernameHasOnlyAlhabet(char *nick)
+{
+    int flag = 0;
+    int i = 0;
+    for (i = 0 ; nick[i]!=0; i++) {
+        if(nick[i]<'a' || nick[i]>'z')
+            flag = 1;
+    }
+    return flag;
+    
+}
 int main(int argc , char *argv[])
 {
     mesg ="Enter a server IP address: ";		/* message to be appeared on the screen */
@@ -116,6 +133,12 @@ int main(int argc , char *argv[])
     mesg = "Enter your nickname: ";
     mvprintw(row/2,(col-strlen(mesg))/2.0,"%s",mesg);
     getstr(user.nickname);
+    while (didUsernameHasOnlyAlhabet(user.nickname)==1) {
+        clear();
+        mesg = "Wrong nickname! Enter your nickname: ";
+        mvprintw(row/2,(col-strlen(mesg))/2.0,"%s",mesg);
+        getstr(user.nickname);
+    }
     //sprintf(serverIP, "127.0.0.1");
     //sprintf(user.nickname,"ArmandsB");
     createConnection(serverIP, user.nickname);
