@@ -21,7 +21,7 @@ struct User
     char nickname[100];
     int userId;
     int planetCount;
-    int userSocket;
+    void *userSocket;
     struct User *next;
     
 } typedef User;
@@ -45,7 +45,12 @@ User *root = NULL;
 void *connection_handler(void *);
 //User message process
 void processUserMessage(char usermessage[],void *socket_desc);
+void sendDataAboutUsers(void *socket_desc);
+void sendDataAboutMap(void *socket_desc);
+void sendDataAboutAttacks(void *socket_desc);
+
 void registerUserForTheGame(char userData[],void *socket_desc);
+void sendUsersGameInformation();
 
 int main(int argc , char *argv[])
 {
@@ -147,6 +152,8 @@ void *countDownStartTime(void *arg)
         sleep(1);
         START_TIME--;
     }
+    
+    REG_FLAG=0;
     return 0;
 }
 
@@ -167,6 +174,7 @@ void *connection_handler(void *socket_desc)
     if(read_size == 0)
     {
         puts("Client disconnected");
+        
         if(REG_FLAG==1){
             if(playerCount>0)
                 playerCount--;
@@ -175,6 +183,14 @@ void *connection_handler(void *socket_desc)
                 START_TIME = START_TIME_DEFINE;
             }
         }
+        
+        if(REG_FLAG == 0 && playerCount == 1)
+        {
+            playerCount--;
+            REG_FLAG=1;
+            START_TIME = START_TIME_DEFINE;
+        }
+        
         fflush(stdout);
     }
     else if(read_size == -1)
@@ -187,6 +203,7 @@ void *connection_handler(void *socket_desc)
     
     return 0;
 }
+
 void processUserMessage(char usermessage[],void *socket_desc)
 {
     char command = usermessage[0];
@@ -194,12 +211,52 @@ void processUserMessage(char usermessage[],void *socket_desc)
         case 'J':
             registerUserForTheGame(usermessage,socket_desc);
             break;
-            
+        case 'U':
+            sendDataAboutUsers(socket_desc);
+            break;
+        case 'M':
+            sendDataAboutMap(socket_desc);
+            break;
+        case 'A':
+            sendDataAboutAttacks(socket_desc);
+            break;
         default:
             break;
     }
 }
 
+void sendDataAboutMap(void *socket_desc)
+{
+    int sock = *(int*)socket_desc;
+    char * message = malloc(sizeof("U ")+sizeof(int)+1);
+    sprintf(message, "U %i",playerCount);
+    User*p = root;
+    while (p!=NULL) {
+        char * user = malloc(sizeof(p->userId)+sizeof(p->nickname)+2);
+        sprintf(user," %i_%s",p->userId,p->nickname);
+        message = realloc(message, sizeof(message)+sizeof(user));
+        strcat(message,user);
+        p=p->next;
+    }
+    send(sock , message , strlen(message) , 0);
+}
+void sendDataAboutAttacks(void *socket_desc)
+{
+    int sock = *(int*)socket_desc;
+    int i =0;
+    char message[1000];
+    sprintf(message,"A 10");
+    for (i = 0; i<10; i++) {
+        int pid = rand() % 10 + 1;
+        int amount = rand() % 100 + 1;
+        int from = rand() % 10 + 1;
+        int time = rand() % 100 + 1;
+        char * attack = malloc(sizeof(int)*4+5);
+        sprintf(attack," %i_%i_%i_%i",pid,amount,from,time);
+        strcat(message, attack);
+    }
+    send(sock , message , strlen(message) , 0);
+}
 void registerUserForTheGame(char userData[],void *socket_desc)
 {
     int sock = *(int*)socket_desc;
@@ -212,7 +269,7 @@ void registerUserForTheGame(char userData[],void *socket_desc)
     user->userId = userIDS;
     user->planetCount = 1;
     user->next = NULL;
-    user->userSocket = sock;
+    user->userSocket = socket_desc;
     if(root == NULL)
         root=user;
     else{
@@ -224,7 +281,6 @@ void registerUserForTheGame(char userData[],void *socket_desc)
     }
     
     char message[1000];
-    playerCount++;
     if(START_TIME <=0)
     {
         sprintf(message, "Game has already started");
@@ -233,10 +289,12 @@ void registerUserForTheGame(char userData[],void *socket_desc)
     }
     else if(playerCount > PLAYERS)
     {
+        playerCount++;
         sprintf(message, "The room is full");
         send(sock , message , strlen(message) , 0);
 
     }else{
+        playerCount++;
         sprintf(message, "J %i %i",userIDS,START_TIME);
         userIDS++;
         send(sock , message , strlen(message) , 0);
