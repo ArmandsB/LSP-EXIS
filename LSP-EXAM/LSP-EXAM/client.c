@@ -29,7 +29,7 @@ UserInformation user;
 char * mesg;	/* message to be appeared on the screen */
 int row,col;
 int sock;
-
+int reloadTrigger;
 WINDOW * galcon_world;
 WINDOW * users_win;
 WINDOW * commands_win;
@@ -38,9 +38,17 @@ MENU *commands;
 void processServerCalls(char *server_reply);
 void didRegisterUserForTheGame(char *server_reply);
 void didReceiveInfoAboutOtherUsers(char *server_reply);
+void didReceiveInfoAboutMap(char *server_reply);
+void didReceiveInfoAboutAttacks(char *server_reply);
 void *communicationWithServer(void *arg);
 void createGameWindow();
-void reloadData(int sig);
+
+void *reloadMapInformation(void *arg);
+void *reloadAttackInformation(void *arg);
+void *reloadUserInformation(void *arg);
+void *get_commands(void *arg);
+
+pthread_mutex_t lock;
 
 void createConnection(char server_ip[], char userNickName[])
 {
@@ -86,7 +94,7 @@ void createConnection(char server_ip[], char userNickName[])
     sprintf(message, "J %s", user.nickname);
     send(sock , message , strlen(message) , 0);
     
-    while( recv(sock , server_reply , 1000 , 0) > 0 )
+    if( recv(sock , server_reply , 1000 , 0) > 0 )
     {
         processServerCalls(server_reply);
     }
@@ -102,6 +110,50 @@ int didUsernameHasOnlyAlhabet(char *nick)
     }
     return flag;
     
+}
+void didReceiveInfoAboutMap(char *server_reply)
+{
+    
+}
+void didReceiveInfoAboutAttacks(char *server_reply)
+{
+    wclear(messages_win);
+    box(messages_win, 0 , 0);
+    wattron(messages_win, A_BOLD);
+    int row_messages_win,col_messages_win;
+    int x,y;
+    getmaxyx(messages_win,row_messages_win,col_messages_win);
+    mvwaddstr(messages_win, 1, (40-strlen("Messages"))/2.0, "Messages");
+    wattroff(messages_win, A_BOLD);
+    y= 2;
+    x= 0;
+    char attacks[1000];
+    sprintf(attacks,"%s",server_reply);
+    
+    strtok(attacks, " ");
+    char * attack_count = strtok(NULL, " ");
+    int i = 0;
+    char * attackArray[atoi(attack_count)];
+    
+    for (i = 0; i<atoi(attack_count); i++) {
+        char * attack = strtok(NULL, " ");
+        attackArray[i] = malloc(sizeof(attack));
+        strcpy(attackArray[i], attack);
+    }
+    for (i = 0; i<atoi(attack_count); i++) {
+        char * attack = attackArray[i];
+        char *attackOnPlanet = strtok(attack, "_");
+        char *shipAmount = strtok(NULL, "_");
+        char *attackFromPlanet = strtok(NULL, "_");
+        char *timeAttack = strtok(NULL, "_");
+        char *attackDesc = malloc(sizeof(int)*4+70);
+        sprintf(attackDesc, "To: %i From: %i Amount: %i After: %i",atoi(attackOnPlanet),atoi(attackFromPlanet),atoi(shipAmount),atoi(timeAttack));;
+        if(y!=col_messages_win-2){
+            mvwaddstr(messages_win, y+1, x+1, attackDesc);
+            y+=1;
+        }
+    }
+    wrefresh(messages_win);
 }
 void didReceiveInfoAboutOtherUsers(char *server_reply)
 {
@@ -165,10 +217,19 @@ void didRegisterUserForTheGame(char *server_reply)
     
     clear();
     refresh();
-    
-    signal(SIGALRM, reloadData);
     createGameWindow();
-    alarm(1);
+    
+    pthread_mutex_init(&lock, NULL);
+    pthread_t reload_users;
+    pthread_create( &reload_users , NULL ,  reloadUserInformation , NULL);
+    pthread_t reload_map;
+    pthread_create( &reload_map , NULL ,  reloadMapInformation , NULL);
+    pthread_t reload_attack;
+    pthread_create( &reload_attack , NULL ,  reloadAttackInformation , NULL);
+    pthread_t commands_thread;
+    pthread_create( &commands_thread , NULL ,  get_commands , NULL);
+    
+    while (1) {}
 
 }
 void processServerCalls(char *server_reply)
@@ -180,6 +241,12 @@ void processServerCalls(char *server_reply)
             break;
         case 'U':
             didReceiveInfoAboutOtherUsers(server_reply);
+            break;
+        case 'A':
+            didReceiveInfoAboutAttacks(server_reply);
+            break;
+        case 'M':
+            didReceiveInfoAboutMap(server_reply);
             break;
         default:
             clear();
@@ -215,6 +282,9 @@ void createGameWindow()
                        offsetx_additions);
     
     box(users_win, 0 , 0);
+    wattron(users_win, A_BOLD);
+    mvwaddstr(users_win, 1, (40-strlen("Players"))/2.0, "Players");
+    wattroff(users_win, A_BOLD);
     scrollok(users_win, FALSE);
     clearok(users_win, TRUE);
     wrefresh(users_win);
@@ -260,22 +330,98 @@ void createGameWindow()
     wattroff(messages_win, A_BOLD);
     wrefresh(messages_win);
 }
-void reloadData(int sig) {
+void *reloadMapInformation(void *arg)
+{
     
-    send(sock , "U" , strlen("U") , 0);
-    send(sock , "M" , strlen("M") , 0);
-    send(sock , "A" , strlen("A") , 0);
-    alarm(5);
+    while(1)
+    {
+        /*
+         char server_reply[1000];
+         pthread_mutex_lock(&lock);
+         send(sock , "M" , strlen("M") , 0);
+         if( recv(sock , server_reply , 1000 , 0) > 0 )
+         {
+         processServerCalls(server_reply);
+         }
+         pthread_mutex_unlock(&lock);
+        sleep(3);
+         */
+    }
+    return 0;
+}
+void *reloadAttackInformation(void *arg)
+{
+    
+    while(1)
+    {
+        pthread_mutex_lock(&lock);
+        char server_reply[1000];
+        send(sock , "A" , strlen("A") , 0);
+        if( recv(sock , server_reply , 1000 , 0) > 0 )
+        {
+            processServerCalls(server_reply);
+        }
+        pthread_mutex_unlock(&lock);
+        sleep(5);
+    }
+    return 0;
+}
+void *reloadUserInformation(void *arg)
+{
+    
+    while(1)
+    {
+        pthread_mutex_lock(&lock);
+        char server_reply[1000];
+        send(sock , "U" , strlen("U") , 0);
+        if( recv(sock , server_reply , 1000 , 0) > 0 )
+        {
+            processServerCalls(server_reply);
+        }
+        pthread_mutex_unlock(&lock);
+        sleep(10);
+    }
+    return 0;
+}
+void *get_commands(void *arg)
+{
+    int c;
+    keypad(commands_win, TRUE);
+    while((c = getch()) != KEY_F(1))
+	{       switch(c)
+        {	case KEY_DOWN:
+				menu_driver(commands, REQ_DOWN_ITEM);
+				break;
+			case KEY_UP:
+				menu_driver(commands, REQ_UP_ITEM);
+				break;
+			case 10: /* Enter */
+			{	ITEM *cur;
+				void (*p)(char *);
+                
+				cur = current_item(commands);
+				p = item_userptr(cur);
+				p((char *)item_name(cur));
+				pos_menu_cursor(commands);
+				break;
+			}
+                break;
+		}
+        wrefresh(commands_win);
+	}
+    
+    return 0;
 }
 int main(int argc , char *argv[])
 {
     mesg ="Enter a server IP address: ";
     char serverIP[100];
-    //initscr();
+    initscr();
     cbreak();
     curs_set(0);
+    keypad(stdscr, TRUE);
     init_pair(1, COLOR_RED, COLOR_BLACK);
-    
+    reloadTrigger = 0;
     getmaxyx(stdscr,row,col);
     mvprintw(row/2,(col-strlen(mesg))/2.0,"%s",mesg);
     getstr(serverIP);
@@ -293,6 +439,5 @@ int main(int argc , char *argv[])
     sprintf(serverIP, "127.0.0.1");
     sprintf(user.nickname,"ArmandsB");
     createConnection(serverIP, user.nickname);
-     
     return 0;
 }

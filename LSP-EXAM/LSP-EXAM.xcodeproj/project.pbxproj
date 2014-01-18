@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		2C09D2821889920A00B873C2 /* LSP_EXAM.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 2C09D2811889920A00B873C2 /* LSP_EXAM.1 */; };
-		2C1DC909188AC4120040B69A /* server.c in Sources */ = {isa = PBXBuildFile; fileRef = 2C09D28A1889925200B873C2 /* server.c */; };
+		2C1DC90D188AE3130040B69A /* server.c in Sources */ = {isa = PBXBuildFile; fileRef = 2C09D28A1889925200B873C2 /* server.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -121,7 +121,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C1DC909188AC4120040B69A /* server.c in Sources */,
+				2C1DC90D188AE3130040B69A /* server.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

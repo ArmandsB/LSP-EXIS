@@ -51,6 +51,7 @@ void sendDataAboutAttacks(void *socket_desc);
 
 void registerUserForTheGame(char userData[],void *socket_desc);
 void sendUsersGameInformation();
+pthread_mutex_t lock;
 
 int main(int argc , char *argv[])
 {
@@ -112,6 +113,7 @@ int main(int argc , char *argv[])
     //Accept and incoming connection
     puts("Waiting for incoming connections...");
     c = sizeof(struct sockaddr_in);
+    pthread_mutex_init(&lock, NULL);
     while( (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
     {
         puts("Connection accepted");
@@ -150,7 +152,9 @@ void *countDownStartTime(void *arg)
     while(START_TIME!=0)
     {
         sleep(1);
+        pthread_mutex_lock(&lock);
         START_TIME--;
+        pthread_mutex_unlock(&lock);
     }
     
     REG_FLAG=0;
@@ -167,14 +171,15 @@ void *connection_handler(void *socket_desc)
     
     //Receive a message from client
     while( (read_size = recv(sock , client_message , 2000 , 0)) > 0 )
-    {
+    {   pthread_mutex_lock(&lock);
         processUserMessage(client_message, socket_desc);
+        pthread_mutex_unlock(&lock);
     }
     
     if(read_size == 0)
     {
         puts("Client disconnected");
-        
+        pthread_mutex_lock(&lock);
         if(REG_FLAG==1){
             if(playerCount>0)
                 playerCount--;
@@ -190,7 +195,7 @@ void *connection_handler(void *socket_desc)
             REG_FLAG=1;
             START_TIME = START_TIME_DEFINE;
         }
-        
+        pthread_mutex_unlock(&lock);
         fflush(stdout);
     }
     else if(read_size == -1)
@@ -225,7 +230,7 @@ void processUserMessage(char usermessage[],void *socket_desc)
     }
 }
 
-void sendDataAboutMap(void *socket_desc)
+void sendDataAboutUsers(void *socket_desc)
 {
     int sock = *(int*)socket_desc;
     char * message = malloc(sizeof("U ")+sizeof(int)+1);
@@ -240,13 +245,31 @@ void sendDataAboutMap(void *socket_desc)
     }
     send(sock , message , strlen(message) , 0);
 }
+void sendDataAboutMap(void *socket_desc)
+{
+    /*
+    int sock = *(int*)socket_desc;
+    char * message = malloc(sizeof("U ")+sizeof(int)+1);
+    sprintf(message, "U %i",playerCount);
+    User*p = root;
+    while (p!=NULL) {
+        char * user = malloc(sizeof(p->userId)+sizeof(p->nickname)+2);
+        sprintf(user," %i_%s",p->userId,p->nickname);
+        message = realloc(message, sizeof(message)+sizeof(user));
+        strcat(message,user);
+        p=p->next;
+    }
+    send(sock , message , strlen(message) , 0);
+     */
+}
 void sendDataAboutAttacks(void *socket_desc)
 {
     int sock = *(int*)socket_desc;
     int i =0;
     char message[1000];
-    sprintf(message,"A 10");
-    for (i = 0; i<10; i++) {
+    int count = rand() % 10 + 1;
+    sprintf(message,"A %i",count);
+    for (i = 0; i<count; i++) {
         int pid = rand() % 10 + 1;
         int amount = rand() % 100 + 1;
         int from = rand() % 10 + 1;
