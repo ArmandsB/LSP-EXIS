@@ -29,6 +29,7 @@ struct User
 int userIDS = 1;
 int REG_FLAG = 1;
 int playerCount = 0;
+int planetCount = 0;
 
 int PLAYERS;
 int START_TIME_DEFINE;
@@ -48,7 +49,7 @@ void processUserMessage(char usermessage[],void *socket_desc);
 void sendDataAboutUsers(void *socket_desc);
 void sendDataAboutMap(void *socket_desc);
 void sendDataAboutAttacks(void *socket_desc);
-
+void sendDataAboutSentAttacks(char usermessage[],void *socket_desc);
 void registerUserForTheGame(char userData[],void *socket_desc);
 void sendUsersGameInformation();
 pthread_mutex_t lock;
@@ -107,6 +108,7 @@ int main(int argc , char *argv[])
         return 1;
     }
     puts("bind done");
+    
     //Listen
     listen(socket_desc , 3);
     c = sizeof(struct sockaddr_in);
@@ -225,6 +227,9 @@ void processUserMessage(char usermessage[],void *socket_desc)
         case 'A':
             sendDataAboutAttacks(socket_desc);
             break;
+        case 'S':
+            sendDataAboutSentAttacks(usermessage,socket_desc);
+            break;
         default:
             break;
     }
@@ -233,13 +238,12 @@ void processUserMessage(char usermessage[],void *socket_desc)
 void sendDataAboutUsers(void *socket_desc)
 {
     int sock = *(int*)socket_desc;
-    char * message = malloc(sizeof("U ")+sizeof(int)+1);
+    char message[1000];
     sprintf(message, "U %i",playerCount);
     User*p = root;
     while (p!=NULL) {
-        char * user = malloc(sizeof(p->userId)+sizeof(p->nickname)+2);
+        char user[100];
         sprintf(user," %i_%s",p->userId,p->nickname);
-        message = realloc(message, sizeof(message)+sizeof(user));
         strcat(message,user);
         p=p->next;
     }
@@ -247,20 +251,19 @@ void sendDataAboutUsers(void *socket_desc)
 }
 void sendDataAboutMap(void *socket_desc)
 {
-    /*
+    
     int sock = *(int*)socket_desc;
-    char * message = malloc(sizeof("U ")+sizeof(int)+1);
-    sprintf(message, "U %i",playerCount);
-    User*p = root;
-    while (p!=NULL) {
-        char * user = malloc(sizeof(p->userId)+sizeof(p->nickname)+2);
-        sprintf(user," %i_%s",p->userId,p->nickname);
-        message = realloc(message, sizeof(message)+sizeof(user));
-        strcat(message,user);
-        p=p->next;
+    char message[1000];
+    planetCount = 3;
+    sprintf(message, "M %i",planetCount);
+    int i = 0;
+    for(i = 0; i<planetCount; i++){
+        char planet[100];
+        int ships = rand() % 10 + 1;
+        sprintf(planet," %i_%i_%i_%i_%i_%i",i,i*50,i*10,i,i*30+50,ships);
+        strcat(message,planet);
     }
     send(sock , message , strlen(message) , 0);
-     */
 }
 void sendDataAboutAttacks(void *socket_desc)
 {
@@ -274,11 +277,24 @@ void sendDataAboutAttacks(void *socket_desc)
         int amount = rand() % 100 + 1;
         int from = rand() % 10 + 1;
         int time = rand() % 100 + 1;
-        char * attack = malloc(sizeof(int)*4+5);
+        char attack[100];
         sprintf(attack," %i_%i_%i_%i",pid,amount,from,time);
         strcat(message, attack);
     }
     send(sock , message , strlen(message) , 0);
+}
+void sendDataAboutSentAttacks(char usermessage[],void *socket_desc)
+{
+    int sock = *(int*)socket_desc;
+    char msg[10];
+    int randomSucces = rand() % 10;
+    int randomTime =rand() % 10;
+    if(randomSucces % 2 == 0){
+        randomSucces = 0;
+        randomTime = 0;
+    }
+    sprintf(msg,"S %i %i",randomSucces,randomTime);
+    send(sock , msg , strlen(msg) , 0);
 }
 void registerUserForTheGame(char userData[],void *socket_desc)
 {
