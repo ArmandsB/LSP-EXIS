@@ -1,28 +1,30 @@
 //
-//  client.c
-//  LSP-EXAM
+//  LSP - client.c
+//  LSP - Eksāmens
 //
 //  Created by Armands Baurovskis on 12/01/14.
 //  Copyright (c) 2014 Armands Baurovskis. All rights reserved.
 //
 
-#include<stdio.h>
-#include<string.h>
-#include<sys/socket.h>
-#include<arpa/inet.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <ncurses.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <menu.h>
 
-
+//User:self
 typedef struct
 {
     char nickname[100];
     int userId;
     
 } UserInformation;
+
+//Planets - window struct
 struct Planets
 {
     int planetID;
@@ -31,6 +33,7 @@ struct Planets
     
 } typedef Planets;
 
+//Player border struct
 struct UserBorders
 {
     char border;
@@ -40,10 +43,10 @@ struct UserBorders
 } typedef UserBorders;
 
 UserInformation user_self;
-char * mesg;	/* message to be appeared on the screen */
-int row,col;
 int sock;
-
+//Drawing global values
+char * mesg;
+int row,col;
 int world_x,world_y,max_world_x,max_world_y;
 int WORLD_HEIGHT =0;
 int WORLD_WIDTH =0;
@@ -53,26 +56,27 @@ WINDOW * commands_win;
 WINDOW * messages_win;
 Planets * root_planets = NULL;
 UserBorders * root_border = NULL;
-
 MENU *commands;
 
-char findBorder(int user_id);
+//Process server data
 void processServerCalls(char *server_reply);
 void didRegisterUserForTheGame(char *server_reply);
 void didReceiveInfoAboutOtherUsers(char *server_reply);
 void didReceiveInfoAboutMap(char *server_reply);
 void didReceiveInfoAboutAttacks(char *server_reply);
 void didReceiveInfoAboutSendindAttacks(char *server_reply);
-void *communicationWithServer(void *arg);
-void createGameWindow();
+void didReceiveInfoAboutStatus(char *server_reply);
 
+//Reload data methods
 void *reloadMapInformation(void *arg);
 void *reloadAttackInformation(void *arg);
 void *reloadUserInformation(void *arg);
 void *get_commands(void *arg);
-
 void userDidPressAttackCommand();
-void userDidPressQuitCommand();
+
+void createGameWindow();
+char findBorder(int user_id);
+void gameDidEnd(int status);
 
 pthread_mutex_t lock;
 
@@ -126,6 +130,7 @@ void createConnection(char server_ip[], char userNickName[])
     }
     
 }
+#pragma API receive methods
 int didUsernameHasOnlyAlhabet(char *nick)
 {
     int flag = 0;
@@ -145,6 +150,7 @@ void didReceiveInfoAboutMap(char *server_reply)
     strtok(planets, " ");
     char * planet_count = strtok(NULL, " ");
     
+    //Create map for the first time
     if(root_planets == NULL)
     {
         getmaxyx(galcon_world, max_world_y, max_world_x);
@@ -169,6 +175,7 @@ void didReceiveInfoAboutMap(char *server_reply)
             char *UID = strtok(NULL, "_");
             char *capacity = strtok(NULL, "_");
             int planet_size;
+            //Check for planet size
             if(atoi(capacity)<=50)
             {
                 planet_size=4;
@@ -203,6 +210,7 @@ void didReceiveInfoAboutMap(char *server_reply)
                 p->next = u;
                 planet_win = u;
             }
+            //Create planet border for specific player
             if (UID!=NULL) {
                 char c = findBorder(atoi(UID));
                 if(c != '|'){
@@ -243,7 +251,6 @@ void didReceiveInfoAboutMap(char *server_reply)
                     break;
                 planet_win=planet_win->next;
             }
-            
             wclear(planet_win->planet);
             if (UID!=NULL) {
                 char c = findBorder(atoi(UID));
@@ -282,7 +289,6 @@ void didReceiveInfoAboutMap(char *server_reply)
         
     }
 }
-
 void didReceiveInfoAboutAttacks(char *server_reply)
 {
     wclear(messages_win);
@@ -352,6 +358,7 @@ void didReceiveInfoAboutOtherUsers(char *server_reply)
             char *userID = strtok(user, "_");
             char *userName = strtok(NULL, "_");
             char fullName[100];
+            //Register borders for player MAX 5;
             if(i<5)
             {
                 if(root_border==NULL)
@@ -361,7 +368,7 @@ void didReceiveInfoAboutOtherUsers(char *server_reply)
                     root_border->border = '*';
                     root_border->next =NULL;
                     
-                }else if(atoi(userID) == user_self.userId){
+                }else{
                     UserBorders *p = root_border;
                     while (p->next!=NULL) {
                         p=p->next;
@@ -477,6 +484,13 @@ void didReceiveInfoAboutSendindAttacks(char *server_reply)
         wrefresh(commands_win);
     }
 }
+void didReceiveInfoAboutStatus(char *server_reply)
+{
+    char * status;
+    strtok(server_reply, " ");
+    status = strtok(NULL, " ");
+    gameDidEnd(atoi(status));
+}
 void didRegisterUserForTheGame(char *server_reply)
 {
     char *userID;
@@ -508,6 +522,7 @@ void didRegisterUserForTheGame(char *server_reply)
         processServerCalls(server_reply);
     }
     
+    //Create thread for each API request
     pthread_mutex_init(&lock, NULL);
     pthread_t reload_users;
     pthread_create( &reload_users , NULL ,  reloadUserInformation , NULL);
@@ -518,9 +533,11 @@ void didRegisterUserForTheGame(char *server_reply)
     pthread_t commands_thread;
     pthread_create( &commands_thread , NULL ,  get_commands , NULL);
     
+    //Loop till die
     while (1) {}
     
 }
+#pragma API - reload data methods
 void processServerCalls(char *server_reply)
 {
     char command = server_reply[0];
@@ -540,6 +557,9 @@ void processServerCalls(char *server_reply)
         case 'S':
             didReceiveInfoAboutSendindAttacks(server_reply);
             break;
+        case 'W':
+            didReceiveInfoAboutStatus(server_reply);
+            break;
         default:
             clear();
             mvprintw(row/2,(col-strlen(server_reply))/2.0,"%s",server_reply);
@@ -550,6 +570,161 @@ void processServerCalls(char *server_reply)
             exit(EXIT_FAILURE);
             break;
     }
+}
+void *reloadMapInformation(void *arg)
+{
+    
+    while(1)
+    {
+        char server_reply[1000];
+        pthread_mutex_lock(&lock);
+        send(sock , "M" , strlen("M") , 0);
+        if( recv(sock , server_reply , 1000 , 0) > 0 )
+        {
+            processServerCalls(server_reply);
+        }
+        pthread_mutex_unlock(&lock);
+        sleep(2);
+    }
+    return 0;
+}
+void *reloadAttackInformation(void *arg)
+{
+    
+    while(1)
+    {
+        pthread_mutex_lock(&lock);
+        char server_reply[1000];
+        send(sock , "A" , strlen("A") , 0);
+        if( recv(sock , server_reply , 1000 , 0) > 0 )
+        {
+            processServerCalls(server_reply);
+        }
+        pthread_mutex_unlock(&lock);
+        sleep(3);
+    }
+    return 0;
+}
+void *reloadUserInformation(void *arg)
+{
+    
+    while(1)
+    {
+        pthread_mutex_lock(&lock);
+        char server_reply[1000];
+        send(sock , "U" , strlen("U") , 0);
+        if( recv(sock , server_reply , 1000 , 0) > 0 )
+        {
+            processServerCalls(server_reply);
+        }
+        pthread_mutex_unlock(&lock);
+        sleep(2);
+    }
+    return 0;
+}
+#pragma Commands menu
+void *get_commands(void *arg)
+{
+    int c;
+    keypad(commands_win, TRUE);
+    while((c = getch()))
+	{
+        pthread_mutex_lock(&lock);
+        switch(c)
+        {	case KEY_DOWN:
+				menu_driver(commands, REQ_DOWN_ITEM);
+				break;
+			case KEY_UP:
+				menu_driver(commands, REQ_UP_ITEM);
+				break;
+			case 10: /* Enter */
+			{
+                keypad(stdscr, false);
+                ITEM *cur;
+                cur = current_item(commands);
+				if(cur->index == 0)
+                    userDidPressAttackCommand();
+                else
+                    gameDidEnd(0);
+                keypad(stdscr, true);
+				break;
+			}
+                break;
+		}
+        wrefresh(commands_win);
+        pthread_mutex_unlock(&lock);
+	}
+    
+    return 0;
+}
+void userDidPressAttackCommand()
+{
+    
+    char from[4];
+    char to[4];
+    char amount[4];
+    char server_reply[10];
+    
+    int row_commands,col_commands;
+    getmaxyx(commands_win,row_commands,col_commands);
+    //From
+    wattron(commands_win, A_BOLD);
+    mvwaddstr(commands_win, row_commands/2, 1, "From: ");
+    wattroff(commands_win, A_BOLD);
+    wgetstr(commands_win, from);
+    wrefresh(commands_win);
+    //To
+    wattron(commands_win, A_BOLD);
+    mvwaddstr(commands_win, row_commands/2+1, 1, "To: ");
+    wattroff(commands_win, A_BOLD);
+    wgetstr(commands_win, to);
+    wrefresh(commands_win);
+    //Amount
+    wattron(commands_win, A_BOLD);
+    mvwaddstr(commands_win, row_commands/2+2, 1, "Amount: ");
+    wattroff(commands_win, A_BOLD);
+    wgetstr(commands_win, amount);
+    wrefresh(commands_win);
+    char message[32];
+    sprintf(message,"S %i %i %i",atoi(from),atoi(to),atoi(amount));
+    
+    send(sock , message , strlen(message) , 0);
+    if( recv(sock , server_reply , 1000 , 0) > 0 )
+    {
+        processServerCalls(server_reply);
+    }
+    
+    
+}
+#pragma - Additional functions
+void gameDidEnd(int status)
+{
+    clear();
+    attron(A_BLINK | A_BOLD);
+    if(status==0)
+        mvprintw(row/2,(col-strlen("YOU LOSE THE GAME. THE GAME IS OVER"))/2.0,"YOU LOSE THE GAME. THE GAME IS OVER");
+    else
+        mvprintw(row/2,(col-strlen("WINNER!!!!! YOU DID WIN THE GAME!!!!"))/2.0,"WINNER!!!!! YOU DID WIN THE GAME!!!!");
+    
+    attroff(A_BLINK | A_BOLD);
+    refresh();
+    sleep(5);
+    clear();
+    endwin();
+    exit(EXIT_FAILURE);
+}
+char findBorder(int user_id)
+{
+    if(user_id == 0)
+        return '|';
+    UserBorders *p = root_border;
+    while (p!=NULL) {
+        if(p->userId == user_id){
+            return p->border;
+        }
+        p=p->next;
+    }
+    return '|';
 }
 void createGameWindow()
 {
@@ -622,156 +797,6 @@ void createGameWindow()
     wattroff(messages_win, A_BOLD);
     wrefresh(messages_win);
 }
-void *reloadMapInformation(void *arg)
-{
-    
-    while(1)
-    {
-        char server_reply[1000];
-        pthread_mutex_lock(&lock);
-        send(sock , "M" , strlen("M") , 0);
-        if( recv(sock , server_reply , 1000 , 0) > 0 )
-        {
-            processServerCalls(server_reply);
-        }
-        pthread_mutex_unlock(&lock);
-        sleep(2);
-    }
-    return 0;
-}
-void *reloadAttackInformation(void *arg)
-{
-    
-    while(1)
-    {
-        pthread_mutex_lock(&lock);
-        char server_reply[1000];
-        send(sock , "A" , strlen("A") , 0);
-        if( recv(sock , server_reply , 1000 , 0) > 0 )
-        {
-            processServerCalls(server_reply);
-        }
-        pthread_mutex_unlock(&lock);
-        sleep(3);
-    }
-    return 0;
-}
-void *reloadUserInformation(void *arg)
-{
-    
-    while(1)
-    {
-        pthread_mutex_lock(&lock);
-        char server_reply[1000];
-        send(sock , "U" , strlen("U") , 0);
-        if( recv(sock , server_reply , 1000 , 0) > 0 )
-        {
-            processServerCalls(server_reply);
-        }
-        pthread_mutex_unlock(&lock);
-        sleep(2);
-    }
-    return 0;
-}
-void *get_commands(void *arg)
-{
-    int c;
-    keypad(commands_win, TRUE);
-    while((c = getch()))
-	{
-        pthread_mutex_lock(&lock);
-        switch(c)
-        {	case KEY_DOWN:
-				menu_driver(commands, REQ_DOWN_ITEM);
-				break;
-			case KEY_UP:
-				menu_driver(commands, REQ_UP_ITEM);
-				break;
-			case 10: /* Enter */
-			{
-                keypad(stdscr, false);
-                ITEM *cur;
-                cur = current_item(commands);
-				if(cur->index == 0)
-                    userDidPressAttackCommand();
-                else
-                    userDidPressQuitCommand();
-                keypad(stdscr, true);
-				break;
-			}
-                break;
-		}
-        wrefresh(commands_win);
-        pthread_mutex_unlock(&lock);
-	}
-    
-    return 0;
-}
-
-void userDidPressAttackCommand()
-{
-    
-    char from[4];
-    char to[4];
-    char amount[4];
-    char server_reply[10];
-    
-    int row_commands,col_commands;
-    getmaxyx(commands_win,row_commands,col_commands);
-    //From
-    wattron(commands_win, A_BOLD);
-    mvwaddstr(commands_win, row_commands/2, 1, "From: ");
-    wattroff(commands_win, A_BOLD);
-    wgetstr(commands_win, from);
-    wrefresh(commands_win);
-    //To
-    wattron(commands_win, A_BOLD);
-    mvwaddstr(commands_win, row_commands/2+1, 1, "To: ");
-    wattroff(commands_win, A_BOLD);
-    wgetstr(commands_win, to);
-    wrefresh(commands_win);
-    //Amount
-    wattron(commands_win, A_BOLD);
-    mvwaddstr(commands_win, row_commands/2+2, 1, "Amount: ");
-    wattroff(commands_win, A_BOLD);
-    wgetstr(commands_win, amount);
-    wrefresh(commands_win);
-    char message[32];
-    sprintf(message,"S %i %i %i",atoi(from),atoi(to),atoi(amount));
-    
-    send(sock , message , strlen(message) , 0);
-    if( recv(sock , server_reply , 1000 , 0) > 0 )
-    {
-        processServerCalls(server_reply);
-    }
-    
-    
-}
-void userDidPressQuitCommand()
-{
-    clear();
-    attron(A_BLINK | A_BOLD);
-    mvprintw(row/2,(col-strlen("The game is over"))/2.0,"The game is over");
-    attroff(A_BLINK | A_BOLD);
-    refresh();
-    sleep(5);
-    clear();
-    endwin();
-    exit(EXIT_FAILURE);
-}
-char findBorder(int user_id)
-{
-    if(user_id == 0)
-        return '|';
-    UserBorders *p = root_border;
-    while (p!=NULL) {
-        if(p->userId == user_id){
-            return p->border;
-        }
-        p=p->next;
-    }
-    return '|';
-}
 int main(int argc , char *argv[])
 {
     mesg ="Enter a server IP address: ";
@@ -796,9 +821,9 @@ int main(int argc , char *argv[])
         mvprintw(row/2,(col-strlen(mesg))/2.0,"%s",mesg);
         getstr(user_self.nickname);
     }
-    
-    sprintf(serverIP, "127.0.0.1");
-    sprintf(user_self.nickname,"ArmandsB");
+    if(strlen(serverIP)==0)
+        sprintf(serverIP, "127.0.0.1");
     createConnection(serverIP, user_self.nickname);
+    endwin();
     return 0;
 }
