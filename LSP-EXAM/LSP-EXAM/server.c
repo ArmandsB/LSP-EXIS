@@ -52,6 +52,8 @@ void sendDataAboutAttacks(void *socket_desc);
 void sendDataAboutSentAttacks(char usermessage[],void *socket_desc);
 void registerUserForTheGame(char userData[],void *socket_desc);
 void sendUsersGameInformation();
+void removePlayer(void *socket_desc);
+char * giveNickname(char *nickname);
 pthread_mutex_t lock;
 
 int main(int argc , char *argv[])
@@ -63,8 +65,10 @@ int main(int argc , char *argv[])
     ssize_t read;
     
     fp = fopen("/Users/armandsbaurovskis/Documents/Developer/LSP-EXIS/LSP-EXAM/LSP-EXAM/config.txt", "r");
-    if (fp == NULL)
+    if (fp == NULL){
+        printf("Failed to read config file");
         exit(EXIT_FAILURE);
+    }
     
     while ((read = getline(&line, &len, fp)) != -1) {
         char * command = strtok(line, " ");
@@ -177,11 +181,11 @@ void *connection_handler(void *socket_desc)
         processUserMessage(client_message, socket_desc);
         pthread_mutex_unlock(&lock);
     }
-    
     if(read_size == 0)
     {
         puts("Client disconnected");
         pthread_mutex_lock(&lock);
+        removePlayer(socket_desc);
         if(REG_FLAG==1){
             if(playerCount>0)
                 playerCount--;
@@ -204,7 +208,7 @@ void *connection_handler(void *socket_desc)
     {
         perror("recv failed");
     }
-    
+
     //Free the socket pointer
     free(socket_desc);
     
@@ -296,6 +300,55 @@ void sendDataAboutSentAttacks(char usermessage[],void *socket_desc)
     sprintf(msg,"S %i %i",randomSucces,randomTime);
     send(sock , msg , strlen(msg) , 0);
 }
+void removePlayer(void *socket_desc)
+{
+    User *p = root;
+    User *u = p;
+    while (p!=NULL) {
+        if(*(int*)p->userSocket == *(int*)socket_desc){
+            break;
+        }
+        u=p;
+        p=p->next;
+    }
+    if(p == NULL)
+        return;
+    if(p == root && p->next==NULL)
+    {
+        free(root);
+        root=NULL;
+        return;
+    }
+    else if(p->next == NULL){
+        u->next = NULL;
+        free(p);
+        return;
+    }
+    else{
+        u->next = p->next;
+        free(p);
+        return;
+    }
+}
+char * giveNickname(char *nickname)
+{
+    char * pch = NULL;
+    int count = 0;
+    User*p = root;
+    while (p!=NULL) {
+        pch = strstr (p->nickname,nickname);
+        if(strlen(pch) !=0)
+            count++;
+        p=p->next;
+    }
+    if(count==0)
+        return nickname;
+    else{
+        char * realnick = malloc(sizeof(nickname)+6);
+        sprintf(realnick,"%s(%i)",nickname,count+1);
+        return realnick;
+    }
+}
 void registerUserForTheGame(char userData[],void *socket_desc)
 {
     int sock = *(int*)socket_desc;
@@ -304,7 +357,7 @@ void registerUserForTheGame(char userData[],void *socket_desc)
     userNickName = strtok(NULL, " ");
     User * user;
     user = (User *) malloc( sizeof(User) );
-    strcpy(user->nickname, userNickName);
+    strcpy(user->nickname, giveNickname(userNickName));
     user->userId = userIDS;
     user->planetCount = 1;
     user->next = NULL;

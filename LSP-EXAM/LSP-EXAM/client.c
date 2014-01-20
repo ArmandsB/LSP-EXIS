@@ -16,8 +16,6 @@
 #include <pthread.h>
 #include <menu.h>
 
-#define WORLD_WIDTH 148
-#define WORLD_HEIGHT 46
 
 typedef struct
 {
@@ -47,6 +45,8 @@ int row,col;
 int sock;
 
 int world_x,world_y,max_world_x,max_world_y;
+int WORLD_HEIGHT =0;
+int WORLD_WIDTH =0;
 WINDOW * galcon_world;
 WINDOW * users_win;
 WINDOW * commands_win;
@@ -669,7 +669,7 @@ void *reloadUserInformation(void *arg)
             processServerCalls(server_reply);
         }
         pthread_mutex_unlock(&lock);
-        sleep(10);
+        sleep(2);
     }
     return 0;
 }
@@ -782,6 +782,8 @@ int main(int argc , char *argv[])
     keypad(stdscr, TRUE);
     
     getmaxyx(stdscr,row,col);
+    WORLD_WIDTH = col-42;
+    WORLD_HEIGHT = row;
     mvprintw(row/2,(col-strlen(mesg))/2.0,"%s",mesg);
     getstr(serverIP);
     clear();
